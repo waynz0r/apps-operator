@@ -25,6 +25,26 @@ rules:
   - update
   - patch
 - apiGroups:
+  - extensions
+  resources:
+  - ingresses
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - extensions
+  resources:
+  - ingresses/status
+  verbs:
+  - get
+  - update
+  - patch
+- apiGroups:
   - apps.k8smeetup.io
   resources:
   - websites

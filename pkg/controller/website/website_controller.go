@@ -117,6 +117,8 @@ type ReconcileWebsite struct {
 // Automatically generate RBAC rules to allow the Controller to read and write Deployments
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=apps,resources=deployments/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=extensions,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=extensions,resources=ingresses/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=apps.k8smeetup.io,resources=websites,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=apps.k8smeetup.io,resources=websites/status,verbs=get;update;patch
 func (r *ReconcileWebsite) Reconcile(request reconcile.Request) (reconcile.Result, error) {
