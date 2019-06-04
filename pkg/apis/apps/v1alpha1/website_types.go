@@ -24,8 +24,10 @@ import (
 
 // WebsiteSpec defines the desired state of Website
 type WebsiteSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// +kubebuilder:validation:Minimum=1
+	ReplicaCount int32  `json:"replicaCount,omitempty"`
+	Hostname     string `json:"hostname,omitempty"`
+	DockerImage  string `json:"dockerImage,omitempty"`
 }
 
 // WebsiteStatus defines the observed state of Website

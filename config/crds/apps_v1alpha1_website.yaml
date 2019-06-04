@@ -27,6 +27,15 @@ spec:
         metadata:
           type: object
         spec:
+          properties:
+            dockerImage:
+              type: string
+            hostname:
+              type: string
+            replicaCount:
+              format: int32
+              minimum: 1
+              type: integer
           type: object
         status:
           type: object

@@ -33,7 +33,13 @@ func TestStorageWebsite(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "foo",
 			Namespace: "default",
-		}}
+		},
+		Spec: WebsiteSpec{
+			Hostname:     "test.example.com",
+			ReplicaCount: 1,
+			DockerImage:  "nginx",
+		},
+	}
 	g := gomega.NewGomegaWithT(t)
 
 	// Test Create

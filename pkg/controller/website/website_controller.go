@@ -133,6 +133,9 @@ func (r *ReconcileWebsite) Reconcile(request reconcile.Request) (reconcile.Resul
 		return reconcile.Result{}, err
 	}
 
+	// Set defaults
+	appsv1alpha1.SetDefaults(instance)
+
 	// Reconcile resources
 	for _, res := range []runtime.Object{
 		r.getDeployment(instance),
@@ -212,7 +215,7 @@ func (r *ReconcileWebsite) getIngress(instance *appsv1alpha1.Website) runtime.Ob
 		Spec: extensions.IngressSpec{
 			Rules: []extensions.IngressRule{
 				{
-					Host: "demo1.k8smeetup.io",
+					Host: instance.Spec.Hostname,
 					IngressRuleValue: extensions.IngressRuleValue{
 						HTTP: &extensions.HTTPIngressRuleValue{
 							Paths: []extensions.HTTPIngressPath{
@@ -260,7 +263,7 @@ func (r *ReconcileWebsite) getService(instance *appsv1alpha1.Website) runtime.Ob
 }
 
 func (r *ReconcileWebsite) getDeployment(instance *appsv1alpha1.Website) runtime.Object {
-	replicaCount := int32(1)
+	replicaCount := int32(instance.Spec.ReplicaCount)
 
 	resource := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -277,8 +280,8 @@ func (r *ReconcileWebsite) getDeployment(instance *appsv1alpha1.Website) runtime
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:                     "nginx",
-							Image:                    "nginx",
+							Name:                     "server",
+							Image:                    instance.Spec.DockerImage,
 							ImagePullPolicy:          corev1.PullAlways,
 							TerminationMessagePath:   corev1.TerminationMessagePathDefault,
 							TerminationMessagePolicy: corev1.TerminationMessageReadFile,
