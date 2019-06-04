@@ -19,13 +19,13 @@ import (
 	"context"
 	"reflect"
 
+	"github.com/pkg/errors"
 	appsv1alpha1 "github.com/waynz0r/apps-operator/pkg/apis/apps/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -34,6 +34,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+
+	objectmatch "github.com/banzaicloud/k8s-objectmatcher"
 )
 
 var log = logf.Log.WithName("controller")
@@ -103,7 +105,7 @@ func (r *ReconcileWebsite) Reconcile(request reconcile.Request) (reconcile.Resul
 	instance := &appsv1alpha1.Website{}
 	err := r.Get(context.TODO(), request.NamespacedName, instance)
 	if err != nil {
-		if errors.IsNotFound(err) {
+		if apierrors.IsNotFound(err) {
 			// Object not found, return.  Created objects are automatically garbage collected.
 			// For additional cleanup logic use finalizers.
 			return reconcile.Result{}, nil
@@ -114,12 +116,14 @@ func (r *ReconcileWebsite) Reconcile(request reconcile.Request) (reconcile.Resul
 
 	// TODO(user): Change this to be the object type created by your controller
 	// Define the desired Deployment object
+	replicaCount := int32(1)
 	deploy := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      instance.Name + "-deployment",
 			Namespace: instance.Namespace,
 		},
 		Spec: appsv1.DeploymentSpec{
+			Replicas: &replicaCount,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{"deployment": instance.Name + "-deployment"},
 			},
@@ -128,8 +132,11 @@ func (r *ReconcileWebsite) Reconcile(request reconcile.Request) (reconcile.Resul
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:  "nginx",
-							Image: "nginx",
+							Name:                     "nginx",
+							Image:                    "nginx",
+							ImagePullPolicy:          corev1.PullAlways,
+							TerminationMessagePath:   corev1.TerminationMessagePathDefault,
+							TerminationMessagePolicy: corev1.TerminationMessageReadFile,
 						},
 					},
 				},
@@ -140,27 +147,59 @@ func (r *ReconcileWebsite) Reconcile(request reconcile.Request) (reconcile.Resul
 		return reconcile.Result{}, err
 	}
 
-	// TODO(user): Change this for the object type created by your controller
-	// Check if the Deployment already exists
-	found := &appsv1.Deployment{}
-	err = r.Get(context.TODO(), types.NamespacedName{Name: deploy.Name, Namespace: deploy.Namespace}, found)
-	if err != nil && errors.IsNotFound(err) {
-		log.Info("Creating Deployment", "namespace", deploy.Namespace, "name", deploy.Name)
-		err = r.Create(context.TODO(), deploy)
-		return reconcile.Result{}, err
-	} else if err != nil {
+	err = r.reconcile(deploy)
+	if err != nil {
 		return reconcile.Result{}, err
 	}
 
-	// TODO(user): Change this for the object type created by your controller
-	// Update the found object and write the result back if there are any changes
-	if !reflect.DeepEqual(deploy.Spec, found.Spec) {
-		found.Spec = deploy.Spec
-		log.Info("Updating Deployment", "namespace", deploy.Namespace, "name", deploy.Name)
-		err = r.Update(context.TODO(), found)
-		if err != nil {
-			return reconcile.Result{}, err
-		}
-	}
 	return reconcile.Result{}, nil
+}
+
+func (r *ReconcileWebsite) reconcile(desired runtime.Object) error {
+	var current = desired.DeepCopyObject()
+	var desiredType = reflect.TypeOf(desired)
+
+	key, err := client.ObjectKeyFromObject(current)
+	if err != nil {
+		return err
+	}
+	logKeys := []interface{}{"kind", desiredType, "namespace", key.Namespace, "name", key.Name}
+
+	err = r.Client.Get(context.TODO(), key, current)
+	if err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+
+	if apierrors.IsNotFound(err) {
+		log.Info("create resource", logKeys...)
+		if err := r.Client.Create(context.TODO(), desired); err != nil {
+			return err
+		}
+		log.Info("resource created")
+		return nil
+	}
+
+	objectsEquals, err := objectmatch.New(log).Match(current, desired)
+	if err != nil {
+		log.Error(err, "could not match objects", logKeys...)
+	} else if objectsEquals {
+		log.V(1).Info("resource is in sync", logKeys...)
+		return nil
+	}
+
+	switch desired.(type) {
+	default:
+		return errors.New("unexpected resource type")
+	case *appsv1.Deployment:
+		desired := desired.(*appsv1.Deployment)
+		desired.ResourceVersion = current.(*appsv1.Deployment).ResourceVersion
+	}
+
+	log.Info("update resource", logKeys...)
+	err = r.Client.Update(context.TODO(), desired)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
