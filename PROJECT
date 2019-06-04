@@ -1,0 +1,3 @@
+version: "1"
+domain: k8smeetup.io
+repo: github.com/waynz0r/apps-operator
